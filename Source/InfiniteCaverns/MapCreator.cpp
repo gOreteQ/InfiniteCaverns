@@ -3,11 +3,15 @@
 #include "InfiniteCaverns.h"
 #include "MapCreator.h"
 #include "MeshCreator.h"
+#include "RuntimeMeshActor.h"
+#include <memory>
 
-void AMapCreator::GenerateCavern(const int32 Width, const int32 Height, const int32 WallPercentage, const int32 SmoothingIterations)
+void AMapCreator::GenerateCavern(const int32 Width, const int32 Height, const int32 WallPercentage, const int32 SmoothingIterations, const int32 Seed)
 {
 	TArray<int32> Map;
 	Map.Reserve(Width*Height);
+
+	FMath::RandInit(Seed);
 
 	//Randomly fill map with 0's and 1's
 	//0 -> Floor (Passable terrain)
@@ -20,11 +24,13 @@ void AMapCreator::GenerateCavern(const int32 Width, const int32 Height, const in
 		}
 		else
 		{
-			int RandomNumber = rand() % 100 + 1;	//Generate random number between 0 and 100
+			int RandomNumber = FMath::RandRange(1, 100);
 			Map.Add(RandomNumber < WallPercentage ? 1 : 0);
 		}
 	}
 
+	
+	
 	int32 SmoothingCounter = 0;
 	while (SmoothingCounter < SmoothingIterations)
 	{
@@ -48,20 +54,39 @@ void AMapCreator::GenerateCavern(const int32 Width, const int32 Height, const in
 		++SmoothingCounter;
 	}
 
+	//for (int i = 0; i < Width; ++i)
+	//{
+	//	for (int j = 0; j < Height; ++j)
+	//	{
+	//		if (Map[j*Width + i] == 1)
+	//		{
+	//			DrawDebugBox(GetWorld(), FVector(100 * i, 100 * j, 0), FVector(45, 45, 45), FColor::Black, false, 200.0f);
+	//		}
+	//	}
+	//}
+
 	//Create the mesh
 	MeshCreator MeshGen = MeshCreator();
-	MeshGen.CreateDynamicMesh(Map, 1.0f, Width, Height);
+	MeshGen.CalculateTrianglesForMesh(Map, 500.0f, Width, Height);
 
-	for (int i = 0; i < Width; ++i)
+	for (FVector Vertex : MeshGen.Vertices)
 	{
-		for (int j = 0; j < Height; ++j)
-		{
-			if (Map[j*Width + i] == 1)
-			{
-				DrawDebugBox(GetWorld(), FVector(100 * i, 100 * j, 0), FVector(45, 45, 45), FColor::Black, false, 5.0f);
-			}
-		}
+		DrawDebugPoint(GetWorld(), Vertex, 10.0f, FColor::Red, false, 60.0f);
 	}
+	
+	//Spawn the map!!
+	MeshData Data{ MeshGen.Vertices, MeshGen.Triangles };
+	ARuntimeMeshActor* RuntimeMap = GetWorld()->SpawnActor<ARuntimeMeshActor>(ARuntimeMeshActor::StaticClass(), FVector(.0f, .0f, .0f), FRotator(.0f, .0f, .0f));
+	if (RuntimeMap)
+	{
+		RuntimeMap->CreateRuntimeMesh(Data);
+		GLog->Log("RuntimeMap SPAWNED");
+	}
+	else
+	{
+		GLog->Log("ERROR: RuntimeMap NULL");
+	}
+	
 }
 
 int32 AMapCreator::GetSorroundingWallsOfCell(const TArray<int32> &Map, const int32 &CellIndex, const int32 &Width, const int32 &Height)
@@ -101,3 +126,6 @@ bool AMapCreator::IsInEdgeOfMap(const int32 &Index, const int32 &Width, const in
 	//Upper edge, Lower edge, Left edge, Right edge
 	return (Index / Width == 0 || (Index >= (Width * (Height - 1)) && Index <= (Width * Height) - 1) || Index % Width == 0 || Index % Width == Width - 1);
 }
+
+
+
